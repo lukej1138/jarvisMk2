@@ -5,19 +5,25 @@ import webbrowser
 import wikipedia
 import wolframalpha
 import music as ms
+import sounddevice as sd
+import numpy as np
+import time
+from kokoro import KPipeline
+from queue import Queue
+import threading
+import time
+
+pipeline = KPipeline(lang_code='a')
+
 
 # Speech engine initialization
-engine = pyttsx3.init()
-voices = engine.getProperty('voices')
-voice_id = 'com.apple.speech.synthesis.voice.Daniel'
+#engine = pyttsx3.init()
+#voices = engine.getPropiperty('voices')
+#voice_id = 'com.apple.speech.synthesis.voice.Daniel'
+#engine.setProperty('voice', voice_id)
+
 activation_word = 'jarvis' #should be a single word(?) ask why
 
-#uses the id of the voices
-engine.setProperty('voice', voice_id)
-
-# # Use to see british voices
-# for voice in voices:
-#     print(voice, voice.id)
 
 #Configure Browser
 #Set The Path
@@ -29,16 +35,46 @@ webbrowser.register('chrome', None, webbrowser.BackgroundBrowser(chrome_path))
 web_id = "LLAXR6-Y3G4EKJX2J"
 wolframClient = wolframalpha.Client(web_id)
 
+stop_speaking = False
+speech_thread = None
+
 def listOrDict(var):
     if isinstance(var, list):
         return var[0]['plaintext']
     return var['plaintext']
 
 
-def speak(text, rate = 120): #rate is how fast voice talks
-    engine.setProperty('rate', rate)
-    engine.say(text)
-    engine.runAndWait()
+def speak(text): 
+    # engine.setProperty('rate', rate)
+    # engine.say(text)
+    # engine.runAndWait()
+
+    global stop_speaking, speech_thread
+
+    stop_speaking = True
+    if speech_thread and speech_thread.is_alive():
+        speech_thread.join() #what does this do?
+    stop_speaking = False
+
+    def _threaded_speaking():
+        generator = pipeline(text, voice='bm_lewis')
+        try:
+            for i, (gs, ps, audio) in enumerate(generator):
+                if stop_speaking:
+                    sd.stop()
+                    break
+                sd.play(audio, samplerate=24050)
+                sd.wait()
+        except Exception as e:
+            if "PortAudio" not in str(e):  # Only show non-audio errors
+                print(f"Error: {e}")
+
+
+    speech_thread = threading.Thread(target=_threaded_speaking)
+    speech_thread.start()
+
+
+
 
 def search_wiki(query = ''):
     searchResults = wikipedia.search(query)
@@ -84,33 +120,41 @@ def search_wolframalpha(query=''):
 
 
 def parseCommand():
+    global stop_speaking
+
     listener = sr.Recognizer()
+    listener.energy_threshold = 4000 
+    listener.dynamic_energy_threshold = True
     print("Listening")
 
     with sr.Microphone() as src:
-        listener.pause_threshold = 1.5 # seconds before stops listening
+        listener.pause_threshold = 2 # seconds before stops listening
         base_speech = listener.listen(src) #recorded input
-    
-    try:
-        print("Processing Speech")
-        query = listener.recognize_google(base_speech, language="en_us") #processed input
-        print(f"you said: {query}")
-    except Exception as e:
-        speak("Didn't quite catch that")
-        print(e)
-        return 'None'
+        try:
+            query = listener.recognize_google(base_speech, language="en_us").lower() #processed input
+            print(f"Heard: {query}")
+            if "stop" in query or "shut up" in query:
+                stop_speaking= True
+                sd.stop()
+                return "interrupt"
+            elif activation_word in query:
+                return query
+        except Exception as e:
+            print(e)
+            return 'None'
     
     return query
 
 #main func:
 if __name__ == '__main__':
     speak("All Systems Up")
+    time.sleep(2)
 
     while True:
         # Parse as list
         query = parseCommand().lower().split()
 
-        if(query[0] == activation_word):
+        if(query[0] == activation_word and len(query) > 1):
             query.pop(0)
             
             #List commands
@@ -148,7 +192,7 @@ if __name__ == '__main__':
                     result = search_wolframalpha(query)
                     speak(result)
                 except:
-                    speak("Unable to Computer")
+                    speak("Unable to Compute")
 
             #Note taking
             if ' '.join(query[:3]) == "create new log":
