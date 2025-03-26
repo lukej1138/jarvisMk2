@@ -154,7 +154,7 @@ if __name__ == '__main__':
         # Parse as list
         query = parseCommand().lower().split()
 
-        if(query[0] == activation_word and len(query) > 1):
+        if(activation_word == query[0] and len(query) > 1):
             query.pop(0)
             
             #List commands
@@ -205,8 +205,13 @@ if __name__ == '__main__':
                 speak("Note has been written")
             
             #Music Player:
-            if ' '.join(query[:3]) == "enter music mode":
-                speak("Downloading DJ Skills... Entering DJ Environment...")
+            if "play" in query:
+                if "by" in query:
+                    speak(f"Playing {" ".join(query[query.index("play")+1:query.index("by")])} by {" ".join(query[query.index("by")+1:])}")
+                    ms.search_and_play_spotify(" ".join(query[query.index("play")+1:query.index("by")]), " ".join(query[query.index("by")+1:]))
+                else:
+                    speak(f"Playing {" ".join(query[query.index("play")+1:])}")
+                    ms.search_and_play_spotify(" ".join(query[query.index("play")+1:]))
                 
 
 
