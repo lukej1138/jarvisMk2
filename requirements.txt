@@ -40,6 +40,7 @@ packaging==24.2
 phonemizer-fork==3.3.1
 pip==25.0.1
 protobuf==6.30.1
+pyaudio==0.2.14
 pycparser==2.22
 pyobjc==11.0
 pyobjc-core==11.0
@@ -205,6 +206,7 @@ segments==2.3.0
 six==1.17.0
 sniffio==1.3.1
 sounddevice==0.5.1
+soundfile==0.13.1
 soupsieve==2.6
 speechrecognition==3.14.1
 standard-aifc==3.13.0
