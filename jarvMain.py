@@ -12,6 +12,7 @@ from kokoro import KPipeline
 from queue import Queue
 import threading
 import time
+import calendarGoogle
 
 pipeline = KPipeline(lang_code='a')
 
@@ -205,13 +206,20 @@ if __name__ == '__main__':
                 speak("Note has been written")
             
             #Music Player:
-            if "play" in query:
+            if "play" in query[:3]:
                 if "by" in query:
                     speak(f"Playing {" ".join(query[query.index("play")+1:query.index("by")])} by {" ".join(query[query.index("by")+1:])}")
                     ms.search_and_play_spotify(" ".join(query[query.index("play")+1:query.index("by")]), " ".join(query[query.index("by")+1:]))
                 else:
                     speak(f"Playing {" ".join(query[query.index("play")+1:])}")
                     ms.search_and_play_spotify(" ".join(query[query.index("play")+1:]))
+            if "schedule" in query[4:]:
+                if query[1] == "remove":
+                    calendarGoogle.delete(query[2:query.index("from")])
+                    
+                
+
+
                 
 
 
