@@ -54,7 +54,7 @@ def speak(text):
 
     stop_speaking = True
     if speech_thread and speech_thread.is_alive():
-        speech_thread.join() #what does this do?
+        speech_thread.join() 
     stop_speaking = False
 
     def _threaded_speaking():
@@ -209,14 +209,23 @@ if __name__ == '__main__':
             if "play" in query[:3]:
                 if "by" in query:
                     speak(f"Playing {" ".join(query[query.index("play")+1:query.index("by")])} by {" ".join(query[query.index("by")+1:])}")
-                    ms.search_and_play_spotify(" ".join(query[query.index("play")+1:query.index("by")]), " ".join(query[query.index("by")+1:]))
+                    if not ms.search_and_play_spotify(" ".join(query[query.index("play")+1:query.index("by")]), " ".join(query[query.index("by")+1:])):
+                        speak("Sorry, I couldn't find that song. Could you try repeating your command?")
                 else:
                     speak(f"Playing {" ".join(query[query.index("play")+1:])}")
-                    ms.search_and_play_spotify(" ".join(query[query.index("play")+1:]))
-            if "schedule" in query[4:]:
-                if query[1] == "remove":
-                    calendarGoogle.delete(query[2:query.index("from")])
-                    
+                    if not ms.search_and_play_spotify(" ".join(query[query.index("play")+1:])):
+                        speak("Sorry, I couldn't find that song. Could you try repeating your command?")
+            
+            #Scheduler
+            if "schedule" in query or "calendar" in query:
+                if query[0] == "remove":
+                    calendarGoogle.delete(query[1:query.index("from")])
+                elif query[0] == "add":
+                    start, end, date, name = calendarGoogle.parseEvent(" ".join(query[1:]))
+                    speak(f"Adding {name} to your schedule, sir")
+                    calendarGoogle.add(start, end, date, name)
+
+
                 
 
 

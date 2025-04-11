@@ -220,24 +220,31 @@ def search_and_play_spotify(query, artist_name=""):
     headers = {
         'Authorization' : f"Bearer {token}"
     }
-
+    query_to_use = query
     if artist_name != "":
-        query += f"artist:{artist_name}"
+         query_to_use += f"artist%3A{artist_name}"
     
+    query_to_use.replace(" ", "+")
+    
+    response = requests.get(API_BASE_URL + f"search?q={query_to_use.lower()}&type=track%2Calbum&limit=1", headers=headers)
 
-    response = requests.get(API_BASE_URL + f"search?q={query}&type=album,track&limit=1", headers=headers)
+    print(API_BASE_URL + f"search?q={query_to_use.lower()}&type=album,track&limit=1")
 
     if response.status_code == 200:
         response = response.json()
         query_to_check = query.lower().strip()
-        if similar(query_to_check, response['albums']['items'][0]['name'].lower().strip()) >= similar(query_to_check, response['tracks']['items'][0]['name'].lower().strip()):
-            print("here")
-            if not play_album(response['albums']['items'][0]):
-                play_song(response['tracks']['items'][0])
-        else:
+        print(response['tracks']['items'][0]['name'])
+        print(response['albums']['items'][0]['name'])
+        #similar(query_to_check, response['albums']['items'][0]['name'].lower().strip())
+        if similar(query_to_check, response['tracks']['items'][0]['name'].lower().strip()) >= 0.7:
             if not play_song(response['tracks']['items'][0]):
                 play_album(response['albums']['items'][0])
-        return True
+            return True
+        elif similar(query_to_check, response['albums']['items'][0]['name'].lower().strip()) >= 0.7:
+            if not play_album(response['albums']['items'][0]):
+                play_song(response['tracks']['items'][0])
+            return True
+        return False
     else:
         print(response.status_code)
         print(response.text)
@@ -249,7 +256,6 @@ def play_album(album):
     headers = {
         'Authorization' : f"Bearer {token}"
     }
-    print(album["uri"])
     data = {
         "context_uri" : album["uri"],
         "offset" : {
@@ -294,7 +300,6 @@ def get_device_id():
     if response.status_code == 200:
         devices = response.json()["devices"]
         for device in devices:
-            print(device['name'])
             if(device['name'] == 'iPhone'):
                 return device['id']
     else:
@@ -305,4 +310,4 @@ def get_device_id():
 if __name__ == "__main__":
     #app.run(debug=True, port=5000)
     #play_playlist("raid the arcade v1")
-    search_and_play_spotify("Hol up ")
+    search_and_play_spotify("mr morale")
