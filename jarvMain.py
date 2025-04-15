@@ -13,7 +13,7 @@ from queue import Queue
 import threading
 import time
 import calendarGoogle
-
+import os 
 pipeline = KPipeline(lang_code='a')
 
 
@@ -23,7 +23,7 @@ pipeline = KPipeline(lang_code='a')
 #voice_id = 'com.apple.speech.synthesis.voice.Daniel'
 #engine.setProperty('voice', voice_id)
 
-activation_word = 'jarvis' #should be a single word(?) ask why
+activation_word = 'jarvis' 
 
 
 #Configure Browser
@@ -49,13 +49,13 @@ def speak(text):
     # engine.setProperty('rate', rate)
     # engine.say(text)
     # engine.runAndWait()
-
     global stop_speaking, speech_thread
-
+    
     stop_speaking = True
     if speech_thread and speech_thread.is_alive():
         speech_thread.join() 
     stop_speaking = False
+
 
     def _threaded_speaking():
         generator = pipeline(text, voice='bm_lewis')
@@ -69,9 +69,12 @@ def speak(text):
         except Exception as e:
             if "PortAudio" not in str(e):  # Only show non-audio errors
                 print(f"Error: {e}")
+        finally:
+            sd.stop()
 
 
     speech_thread = threading.Thread(target=_threaded_speaking)
+    speech_thread.daemon = True
     speech_thread.start()
 
 
@@ -115,59 +118,77 @@ def search_wolframalpha(query=''):
     else:
         question = listOrDict(pod0['subpod'])
         #try out wikipedia
-        speak("Computation Failed; Querying universal databank.")
+        speak("Computation Failed; trying wikipedia.")
         return search_wiki(question)
     
-
-
-def parseCommand():
-    global stop_speaking
-
+def get_listening_result():
     listener = sr.Recognizer()
     listener.energy_threshold = 4000 
     listener.dynamic_energy_threshold = True
     print("Listening")
 
     with sr.Microphone() as src:
-        listener.pause_threshold = 2 # seconds before stops listening
-        base_speech = listener.listen(src) #recorded input
+        timeout = 1 # seconds before stops listening
+        listener.adjust_for_ambient_noise(src)
         try:
+            base_speech = listener.listen(src) #recorded input
             query = listener.recognize_google(base_speech, language="en_us").lower() #processed input
             print(f"Heard: {query}")
-            if "stop" in query or "shut up" in query:
-                stop_speaking= True
-                sd.stop()
-                return "interrupt"
-            elif activation_word in query:
-                return query
+            return query
         except Exception as e:
             print(e)
             return 'None'
-    
     return query
+
+def parseCommand():
+    global stop_speaking
+    command = get_listening_result()
+    if not command:
+        return None
+    
+    if ("stop" in command or "shut up" in command) and stop_speaking == False:
+        stop_speaking = True
+        sd.stop()
+        time.sleep(0.5)
+        return "interrupt"
+    
+    if activation_word in command:
+        return command
+
+
 
 #main func:
 if __name__ == '__main__':
-    speak("All Systems Up")
+    speak("Hello!")
     time.sleep(2)
 
+    is_speaking = False
     while True:
         # Parse as list
-        query = parseCommand().lower().split()
+        query = parseCommand()
+        if not query:
+            continue
+
+        query = query.lower().split()
+        if query == "interrupt":
+            is_speaking = False
+            continue
 
         if(activation_word == query[0] and len(query) > 1):
             query.pop(0)
+            is_speaking = True
             
             #List commands
             if query[0] == 'say':
                 if 'hello' in query:
-                    speak("Salutations, Dipshit")
+                    speak("Salutations")
                 else:
                     query.pop(0)
                     speech = ' '.join(query)
                     speak(speech)
             if query[0] == 'off':
                 speak("With Pleasure")
+                time.sleep(2)
                 break
 
             #Navigation:
@@ -216,16 +237,35 @@ if __name__ == '__main__':
                     if not ms.search_and_play_spotify(" ".join(query[query.index("play")+1:])):
                         speak("Sorry, I couldn't find that song. Could you try repeating your command?")
             
+            if "resume" in query:
+                result = ms.resume()
+                if not result:
+                    speak("Music is already playing, sir")
+                else:
+                    speak("Playback started")
+            
+            if ("pause" in query or "off" in query) and "music" in query:
+                result = ms.pause()
+                if not result:
+                    speak("Music is already off, sir")
+                
+
+
             #Scheduler
             if "schedule" in query or "calendar" in query:
                 if query[0] == "remove":
-                    calendarGoogle.delete(query[1:query.index("from")])
+                    calendarGoogle.remove(query[1:query.index("from")])
                 elif query[0] == "add":
                     start, end, date, name = calendarGoogle.parseEvent(" ".join(query[1:]))
-                    speak(f"Adding {name} to your schedule, sir")
-                    calendarGoogle.add(start, end, date, name)
-
-
+                    if start == "No Break":
+                        speak("Please use the work 'break' when adding to the calendar")
+                    elif not start or not end or not date or not name:
+                        speak("Could not add to calendar; please try again")
+                    else: 
+                        speak(f"Adding {name} to your schedule, sir")
+                        calendarGoogle.add(start, end, date, name)
+            is_speaking = False
+    os._exit(0)
                 
 
 

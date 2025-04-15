@@ -23,9 +23,10 @@ def parseEvent(inputText):
   for name in list(calendar.month_name):
     if name.lower() in splitUpInput:
       date = splitUpInput[splitUpInput.index(name.lower()): splitUpInput.index(name.lower())+2]
-  
-  text = " ".join(splitUpInput[:splitUpInput.index("end")])
-
+  try:
+    text = " ".join(splitUpInput[:splitUpInput.index("break")])
+  except:
+    return "No Break", None, None, None
   # date = splitUpInput[splitUpInput.index("on")+1: splitUpInput.index("on")+3]
   # start = splitUpInput[splitUpInput.index("from")+1:splitUpInput.index("to")]
   # end = splitUpInput[splitUpInput.index("to")+1:splitUpInput.index("on")]
@@ -94,6 +95,7 @@ def get_valid_creds():
   return creds
 
 def remove(name):
+  search_name = " ".join(name).lower()
   try:
     service, events = get_service_events()
     if not service or not events:
@@ -104,7 +106,7 @@ def remove(name):
       return
 
     for event in events:
-      if event['summary'].lower() == name.lower():  # Match event summary to the name
+      if event['summary'].lower() == search_name:  # Match event summary to the name
         event_id = event['id']
         print(f"Deleting event: {event['summary']} ({event_id})")
         service.events().delete(calendarId='primary', eventId=event_id).execute()

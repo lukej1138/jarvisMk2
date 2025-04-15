@@ -113,13 +113,9 @@ def callback():
     return jsonify({"error": "Authorization code not found in request."}), 400
 
 def get_playlists():
-    token = get_valid_token()
+    header = get_header()
     
-    headers = {
-        'Authorization': f"Bearer {token}"
-    }
-    
-    response = requests.get(API_BASE_URL + f"users/{username}/playlists", headers=headers)
+    response = requests.get(API_BASE_URL + f"users/{username}/playlists", headers=header)
     playlists = response.json()  
 
     return playlists #Returns dict of playlists
@@ -146,10 +142,7 @@ def play_playlist(playlist_name, song_start_name=""):
     context_URI =  ""
     playlist_object = None
     data = {}
-    token = get_valid_token()
-    headers = {
-        'Authorization': f"Bearer {token}"
-    }
+    header = get_header()
 
     for values in playlists["items"]:
         if values['name'].lower().strip() == playlist_name.lower().strip():
@@ -162,7 +155,7 @@ def play_playlist(playlist_name, song_start_name=""):
     
     if(song_start_name != ""):
         song_start_uri = ""
-        tracks = requests.get(API_BASE_URL + f"playlists/{playlist_object['id']}/tracks", headers=headers).json()
+        tracks = requests.get(API_BASE_URL + f"playlists/{playlist_object['id']}/tracks", headers=header).json()
         items = tracks['items']
         for item in items:
             if  song_start_name.lower() in item['track']['name'].lower():
@@ -175,7 +168,7 @@ def play_playlist(playlist_name, song_start_name=""):
                     'uri': song_start_uri
                 }
             }
-            response = requests.put(API_BASE_URL + f"me/player/play?device_id={get_device_id()}", json=data, headers=headers)
+            response = requests.put(API_BASE_URL + f"me/player/play?device_id={get_device_id()}", json=data, headers=header)
             if response.status_code == 204:
                 print("Playback started successfully.")
                 return True
@@ -190,9 +183,8 @@ def play_playlist(playlist_name, song_start_name=""):
                     'position': 0
                 }
         }
-    response = requests.put(API_BASE_URL + f"me/player/play?device_id={get_device_id()}", json=data, headers=headers)
+    response = requests.put(API_BASE_URL + f"me/player/play?device_id={get_device_id()}", json=data, headers=header)
 
-    #Courtesy of ChatGPT
     if response.status_code == 204:
         print("Playback started successfully.")
         return True
@@ -215,47 +207,55 @@ def search_and_play_spotify(query, artist_name=""):
     #No playlist found, resort to looking through albums/artists with API
     #query needs to be song/album name
     #artist_name should be artist name
-    token = get_valid_token()
-
-    headers = {
-        'Authorization' : f"Bearer {token}"
-    }
-    query_to_use = query
+    header = get_header()
+    query_for_response = query
     if artist_name != "":
-         query_to_use += f"artist%3A{artist_name}"
+         query_for_response += f"artist%3A{artist_name}"
     
-    query_to_use.replace(" ", "+")
+    query_for_response.replace(" ", "+")
     
-    response = requests.get(API_BASE_URL + f"search?q={query_to_use.lower()}&type=track%2Calbum&limit=1", headers=headers)
+    response = requests.get(API_BASE_URL + f"search?q={query_for_response.lower()}&type=track%2Calbum&limit=5", headers=header)
 
-    print(API_BASE_URL + f"search?q={query_to_use.lower()}&type=album,track&limit=1")
+    print(API_BASE_URL + f"search?q={query_for_response.lower()}&type=album,track&limit=1")
 
     if response.status_code == 200:
         response = response.json()
-        query_to_check = query.lower().strip()
-        print(response['tracks']['items'][0]['name'])
-        print(response['albums']['items'][0]['name'])
+        query_to_check = query.lower()
+        query_to_check = query_to_check.replace(" ", "")
         #similar(query_to_check, response['albums']['items'][0]['name'].lower().strip())
-        if similar(query_to_check, response['tracks']['items'][0]['name'].lower().strip()) >= 0.7:
-            if not play_song(response['tracks']['items'][0]):
-                play_album(response['albums']['items'][0])
-            return True
-        elif similar(query_to_check, response['albums']['items'][0]['name'].lower().strip()) >= 0.7:
-            if not play_album(response['albums']['items'][0]):
-                play_song(response['tracks']['items'][0])
-            return True
+        for track in response['tracks']['items']:
+            track_name = track['name'].lower().strip()
+            track_name = track_name.replace(" ", "")
+            if len(query_to_check) < len(track_name):
+                track_name = track_name[:len(query_to_check)]
+            if similar(query_to_check, track_name) >= 0.85:
+                if not play_song(track):
+                    continue
+                return True
+        for album in response['albums']['items']:
+            album_name = album['name'].lower().strip()
+            album_name = album_name.replace(" ", "")
+            if similar(query_to_check, album_name) >= 0.85:
+                if not play_album(album):
+                    continue
+                return True
         return False
     else:
         print(response.status_code)
         print(response.text)
         return False
-    
-def play_album(album):
+
+def get_header():
     token = get_valid_token()
 
-    headers = {
+    header = {
         'Authorization' : f"Bearer {token}"
     }
+    
+    return header
+    
+def play_album(album):
+    header = get_header()
     data = {
         "context_uri" : album["uri"],
         "offset" : {
@@ -263,7 +263,7 @@ def play_album(album):
         }
 
     }
-    response = requests.put(API_BASE_URL + f"me/player/play?device_id={get_device_id()}", json=data, headers=headers)
+    response = requests.put(API_BASE_URL + f"me/player/play?device_id={get_device_id()}", json=data, headers=header)
     if response.status_code == 204:
         print("Playback started successfully.")
         return True
@@ -272,15 +272,11 @@ def play_album(album):
         return False
 
 def play_song(song):
-    token = get_valid_token()
-
-    headers = {
-        'Authorization' : f"Bearer {token}"
-    }
+    header = get_header()
     data = {
         "uris" : [f"{song["uri"]}"]
     }
-    response = requests.put(API_BASE_URL + f"me/player/play?device_id={get_device_id()}", json=data, headers=headers)
+    response = requests.put(API_BASE_URL + f"me/player/play?device_id={get_device_id()}", json=data, headers=header)
     if response.status_code == 204:
         print("Playback started successfully.")
         return True
@@ -292,22 +288,59 @@ def similar(a, b):
     return SequenceMatcher(None, a, b).ratio()  
 
 def get_device_id():
-    token = get_valid_token()
-    headers = {
-        'Authorization' : f"Bearer {token}"
-    }
-    response = requests.get(API_BASE_URL + f"me/player/devices", headers=headers)
+    header = get_header()
+    response = requests.get(API_BASE_URL + f"me/player/devices", headers=header)
     if response.status_code == 200:
         devices = response.json()["devices"]
+        device_names = {}
         for device in devices:
-            if(device['name'] == 'iPhone'):
-                return device['id']
+            device_names[device['name']] = device
+        if 'iPhone' in device_names:
+            return device_names['iPhone']['id']
+        elif device_names:
+            return device_names.values()[0]['id']
     else:
         print(f"Error {response.status_code}, Message: {response.text}")
 
+def resume():
+    if not check_playback():
+        header= get_header()
+        response = requests.put(API_BASE_URL + f"me/player/play?device_id={get_device_id()}", headers=header)
+        if response.status_code == 200:
+            print("Resumed Music")
+            return True
+        else:
+            print(f"Error {response.status_code}, Message: {response.text}")
+            return False
+    else:
+        return False
 
+def pause():
+    if check_playback():
+        header = get_header()
+        response = requests.put(API_BASE_URL + f"me/player/pause?device_id={get_device_id()}", headers=header)
+        if response.status_code == 200:
+            print("Paused Music")
+            return True
+        else:
+            print(f"Error {response.status_code}, Message: {response.text}")
+            return False
+    else:
+        return False
+
+
+def check_playback():
+    header = get_header()
+    response = requests.get(API_BASE_URL + f"me/player", headers=header)
+    if response.status_code == 204:
+        return False 
+    
+    return response.json()['is_playing']
+
+
+
+#Pause, resume, fast forward
     
 if __name__ == "__main__":
     #app.run(debug=True, port=5000)
-    #play_playlist("raid the arcade v1")
-    search_and_play_spotify("mr morale")
+    resume()
